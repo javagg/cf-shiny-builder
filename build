@@ -1,0 +1,77 @@
+#!/bin/bash
+
+set -e
+
+export R_VERSION=3.1.1
+export CMAKE_VERSION=2.8.12.2
+export SHINY_SERVER_VERSION=1.2.0
+
+# Compile R
+cd /var/cache/work
+if [ ! -f /var/cache/work/R-${R_VERSION}.tar.gz ]; then
+  wget -q -O /var/cache/work/R-${R_VERSION}.tar.gz http://cran.rstudio.com/src/base/R-3/R-${R_VERSION}.tar.gz
+fi
+tar zxf /var/cache/work/R-${R_VERSION}.tar.gz
+
+pushd R-${R_VERSION}
+  ./configure --prefix=/app/R
+make
+make install
+popd
+
+# Package R
+cd /app
+tar cjvf R-${R_VERSION}.tar.bz2 R
+mkdir -p /var/cache/work/out
+cp R-${R_VERSION}.tar.bz2 /var/cache/work/out
+
+# Compile cmake
+cd /var/cache/work
+if [ ! -f /var/cache/work/cmake-${CMAKE_VERSION}.tar.gz ]; then
+  wget -q -O /var/cache/work/cmake-${CMAKE_VERSION}.tar.gz http://www.cmake.org/files/v2.8/cmake-${CMAKE_VERSION}.tar.gz
+fi
+tar zxf /var/cache/work/cmake-${CMAKE_VERSION}.tar.gz
+
+pushd cmake-${CMAKE_VERSION}
+  ./configure --prefix=/app/cmake
+make
+make install
+popd
+
+# Package cmake
+cd /app
+tar cjvf cmake-${CMAKE_VERSION}.tar.bz2 cmake
+mkdir -p /var/cache/work/out
+cp cmake-${CMAKE_VERSION}.tar.bz2 /var/cache/work/out
+
+PATH="/app/cmake/bin:${PATH}"
+PYTHON=`which python`
+$PYTHON --version
+
+# Compile shiny-server
+cd /var/cache/work
+if [ ! -f /var/cache/work/shiny-server-${SHINY_SERVER_VERSION}.tar.gz ]; then
+  wget -q -O /var/cache/work/shiny-server-${SHINY_SERVER_VERSION}.tar.gz https://github.com/rstudio/shiny-server/archive/v${SHINY_SERVER_VERSION}.tar.gz
+fi
+tar zxf /var/cache/work/shiny-server-${SHINY_SERVER_VERSION}.tar.gz
+
+pushd shiny-server-${SHINY_SERVER_VERSION}
+mkdir -p build
+cd build
+cmake -DCMAKE_INSTALL_PREFIX=/app/shiny-server -DPYTHON="$PYTHON" ../
+make
+cd ..
+PATH=${PWD}/bin:$PATH
+bin/npm --python="$PYTHON" rebuild
+ext/node/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js --python="$PYTHON" rebuild
+popd
+
+# Package shiny-server
+cp -a shiny-server-${SHINY_SERVER_VERSION} /app
+cd /app
+mv shiny-server-${SHINY_SERVER_VERSION} shiny-server
+tar cjvf shiny-server-${SHINY_SERVER_VERSION}.tar.bz2 shiny-server
+mkdir -p /var/cache/work/out
+cp shiny-server-${SHINY_SERVER_VERSION}.tar.bz2 /var/cache/work/out
+
+
